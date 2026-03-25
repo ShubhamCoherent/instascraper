@@ -138,7 +138,7 @@ async function saveToMongo(result) {
     await Profile.findOneAndUpdate(
       { 'data.username': result.data.username },
       result,
-      { upsert: true, new: true }
+      { upsert: true, returnDocument: 'after' }
     );
   } catch (err) {
     log(`  MongoDB save failed for @${result.data.username}: ${err.message}`);
