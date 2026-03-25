@@ -1,0 +1,6 @@
+node_modules/
+.env
+scraper/configs/
+backend/all_profiles.json
+backend/skipped_profiles.json
+backend/data/
