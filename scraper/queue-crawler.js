@@ -687,9 +687,8 @@ async function processJob(job) {
     },
   };
 
-  // Save to MongoDB + JSON file
+  // Save to MongoDB only
   await saveToMongo(result);
-  appendProfile(result);
 
   // Mark as scraped in Redis
   await redis.sadd(SCRAPED_KEY, username);
