@@ -597,13 +597,20 @@ async function processJob(job) {
     throw err;
   }
 
-  if (!profile) return { status: 'skipped', reason: 'not_found' };
-  if (profile.is_private) return { status: 'skipped', reason: 'private' };
+  if (!profile) {
+    await saveSkippedToMongo(username, 0, 'not_found', depth, source);
+    return { status: 'skipped', reason: 'not_found' };
+  }
+  if (profile.is_private) {
+    await saveSkippedToMongo(username, 0, 'private', depth, source);
+    return { status: 'skipped', reason: 'private' };
+  }
 
   const followers = profile.followers || 0;
 
   if (followers < LIMITS.minFollowers) {
     log(`  @${username}: ${followers.toLocaleString()} followers (< ${LIMITS.minFollowers.toLocaleString()}). Skip.`);
+    await saveSkippedToMongo(username, followers, 'too_few_followers', depth, source);
     return { status: 'skipped', reason: 'too_few_followers' };
   }
 
