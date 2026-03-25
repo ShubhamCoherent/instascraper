@@ -54,8 +54,8 @@ const DELAYS = {
   betweenPages: [2000, 4000],      // 2-4s between post pagination
   afterSuggestions: [3000, 6000],   // 3-6s after fetching suggestions
   onRateLimit: [90000, 120000],    // 1.5-2min on 429
-  cooldownEvery: 25,               // cooldown every N jobs
-  cooldownMs: [40000, 60000],      // 40-60s cooldown
+  cooldownEvery: [20, 30],          // randomize: cooldown every 20-30 jobs
+  cooldownMs: [40000, 70000],      // 40-70s cooldown
 };
 
 // =============================================
@@ -130,7 +130,29 @@ async function connectMongo() {
   }
 }
 
+const skippedSchema = new mongoose.Schema({
+  username: { type: String, unique: true, index: true },
+  followers: Number,
+  reason: String,
+  depth: Number,
+  source: String,
+  skipped_at: String,
+}, { timestamps: true });
+
+const SkippedProfile = mongoose.model('SkippedProfile', skippedSchema, 'insta_SkippedProfiles');
+
 let mongoConnected = false;
+
+async function saveSkippedToMongo(username, followers, reason, depth, source) {
+  if (!mongoConnected) return;
+  try {
+    await SkippedProfile.findOneAndUpdate(
+      { username },
+      { username, followers, reason, depth, source, skipped_at: new Date().toISOString() },
+      { upsert: true, returnDocument: 'after' }
+    );
+  } catch (err) {}
+}
 
 async function saveToMongo(result) {
   if (!mongoConnected) return;
@@ -552,11 +574,14 @@ async function processJob(job) {
 
   log(`[${jobCount}] Scraping @${username} (depth: ${depth}, from: @${source || 'seed'})`);
 
-  // Cooldown check
-  if (jobCount > 0 && jobCount % DELAYS.cooldownEvery === 0) {
+  // Cooldown check — randomized interval to avoid pattern detection
+  if (!global._nextCooldownAt) global._nextCooldownAt = Math.floor(DELAYS.cooldownEvery[0] + Math.random() * (DELAYS.cooldownEvery[1] - DELAYS.cooldownEvery[0]));
+  if (jobCount > 0 && jobCount % global._nextCooldownAt === 0) {
     const cooldown = DELAYS.cooldownMs[0] + Math.random() * (DELAYS.cooldownMs[1] - DELAYS.cooldownMs[0]);
     log(`  Cooldown: ${(cooldown / 1000).toFixed(0)}s after ${jobCount} jobs...`);
     await new Promise(r => setTimeout(r, cooldown));
+    // Set next random cooldown interval
+    global._nextCooldownAt = jobCount + Math.floor(DELAYS.cooldownEvery[0] + Math.random() * (DELAYS.cooldownEvery[1] - DELAYS.cooldownEvery[0]));
   }
 
   // Step 1: Scrape profile
@@ -585,6 +610,7 @@ async function processJob(job) {
   if (followers > LIMITS.maxFollowers) {
     log(`  @${username}: ${followers.toLocaleString()} followers (> ${LIMITS.maxFollowers.toLocaleString()}). Skip.`);
     logSkipped(username, followers, 'too_many_followers', depth, source);
+    await saveSkippedToMongo(username, followers, 'too_many_followers', depth, source);
     return { status: 'skipped', reason: 'too_many_followers' };
   }
 
