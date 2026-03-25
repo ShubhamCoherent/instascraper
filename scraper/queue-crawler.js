@@ -44,18 +44,20 @@ const CONFIG = {
 const LIMITS = {
   minFollowers: 5000,
   maxFollowers: 200000,
-  maxPostsPerProfile: 50,
+  maxPostsSmall: 12,       // 5K-100K followers → 12 posts
+  maxPostsLarge: 50,       // 100K-200K followers → 50 posts
+  followerThreshold: 100000, // boundary between small and large
   maxDepth: 4,
 };
 
-// Delays (ms) — safe but fast
+// Delays (ms) — optimized
 const DELAYS = {
-  betweenJobs: [5000, 8000],       // 5-8s between profile scrapes
-  betweenPages: [2000, 4000],      // 2-4s between post pagination
-  afterSuggestions: [3000, 6000],   // 3-6s after fetching suggestions
+  betweenJobs: [3000, 5000],       // 3-5s between profile scrapes
+  betweenPages: [1000, 2000],      // 1-2s between post pagination
+  afterSuggestions: [2000, 3000],   // 2-3s after fetching suggestions
   onRateLimit: [90000, 120000],    // 1.5-2min on 429
-  cooldownEvery: [20, 30],          // randomize: cooldown every 20-30 jobs
-  cooldownMs: [40000, 70000],      // 40-70s cooldown
+  cooldownEvery: [30, 40],          // cooldown every 30-40 jobs
+  cooldownMs: [30000, 45000],      // 30-45s cooldown
 };
 
 // =============================================
@@ -628,7 +630,8 @@ async function processJob(job) {
   let rawPosts = [];
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
-      rawPosts = await fetchUserPosts(username, LIMITS.maxPostsPerProfile);
+      const maxPosts = followers >= LIMITS.followerThreshold ? LIMITS.maxPostsLarge : LIMITS.maxPostsSmall;
+      rawPosts = await fetchUserPosts(username, maxPosts);
       break;
     } catch (err) {
       if (err.message === 'HTTP_302' && attempt === 1) {
