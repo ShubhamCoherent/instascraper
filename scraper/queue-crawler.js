@@ -309,11 +309,24 @@ async function scrapeProfile(username) {
 
   // Extract real bio from JSON embedded in HTML
   const bioJsonMatch = html.match(/"biography":"((?:[^"\\]|\\.)*)"/);
-  if (bioJsonMatch) {
+  if (bioJsonMatch && bioJsonMatch[1] !== '') {
     try {
       profile.bio = JSON.parse('"' + bioJsonMatch[1] + '"');
     } catch (e) {
       profile.bio = bioJsonMatch[1].replace(/\\n/g, '\n').replace(/\\"/g, '"');
+    }
+  }
+
+  // Fallback: extract bio from meta name="description" tag
+  // Format: "276M Followers, 287 Following, 1,049 Posts - Name (@user) on Instagram: "ACTUAL BIO""
+  if (!profile.bio) {
+    const metaDescIdx = html.indexOf('name="description"');
+    if (metaDescIdx > -1) {
+      const snippet = html.substring(Math.max(0, metaDescIdx - 1000), metaDescIdx + 50);
+      const bioMatch = snippet.match(/on Instagram: &quot;([\s\S]+)&quot;/);
+      if (bioMatch) {
+        profile.bio = decodeHtmlEntities(bioMatch[1]);
+      }
     }
   }
 
@@ -678,9 +691,9 @@ async function processJob(job) {
       followers: userInfo.follower_count || profile.followers,
       following: userInfo.following_count || profile.following || 0,
       posts_count: userInfo.media_count || profile.posts_count || 0,
-      bio: userInfo.biography || profile.bio || '',
-      category: userInfo.category || '',
-      external_url: userInfo.external_url || '',
+      bio: profile.bio || userInfo.biography || '',
+      category: profile.category || userInfo.category || '',
+      external_url: profile.external_url || userInfo.external_url || '',
       is_business: userInfo.is_business || false,
       is_professional: userInfo.is_professional || false,
       city: userInfo.city_name || '',
